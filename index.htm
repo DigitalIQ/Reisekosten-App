@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="de" class="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reisekosten-App Pro</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        darkBg: '#0f172a',
+                        darkCard: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Leaflet CSS & JS for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+
+        #map-container {
+            z-index: 10;
+        }
+
+        /* Toast Animation */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-enter {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+
+<body
+    class="bg-gray-50 dark:bg-darkBg text-gray-800 dark:text-gray-200 font-sans transition-colors duration-200 min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav
+        class="bg-white/90 dark:bg-darkCard/90 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500"></div>
+        <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between mt-1">
+            <div class="flex items-center gap-2">
+                <i class="ph-fill ph-car-profile text-3xl text-indigo-500"></i>
+                <h1
+                    class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+                    Reisekosten Pro</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="openSaveLoadModal()" title="Tracks speichern/laden"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-800/50 dark:text-emerald-400 transition-colors text-sm font-medium">
+                    <i class="ph ph-floppy-disk text-lg"></i> <span class="hidden sm:inline">Speichern/Laden</span>
+                </button>
+                <button onclick="shareLink()"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors text-sm font-medium">
+                    <i class="ph ph-share-network text-lg"></i> <span class="hidden sm:inline">Teilen</span>
+                </button>
+                <button onclick="toggleDarkMode()"
+                    class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors">
+                    <i class="ph ph-moon text-lg dark:hidden"></i>
+                    <i class="ph ph-sun text-lg hidden dark:block text-yellow-400"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main
+        class="flex-grow max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+        <!-- Address Autocomplete Datalist -->
+        <datalist id="address-book"></datalist>
+        <datalist id="client-book"></datalist>
+
+        <!-- LEFT COLUMN: Inputs -->
+        <div class="lg:col-span-8 space-y-6">
+
+            <!-- Global Costs Card -->
+            <div
+                class="bg-white dark:bg-darkCard rounded-2xl shadow-sm border-t-4 border-t-pink-500 border-x border-b border-gray-100 dark:border-gray-800 p-6 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 dark:bg-pink-500/5 rounded-bl-full -z-0">
+                </div>
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2 relative z-10"><i
+                        class="ph-fill ph-wallet text-pink-500 text-xl"></i> Fixkosten & Kraftstoff</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Mietwagen /
+                            Fixkosten (€)</label>
+                        <input type="number" id="input-rental-cost" placeholder="0.00" oninput="calculateAll()"
+                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-all dark:text-white">
+                    </div>
+                    <div>
+                        <label
+                            class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 flex justify-between">
+                            <span>Tankkosten (€)</span>
+                            <button onclick="openGasCalc()"
+                                class="text-pink-500 hover:text-pink-600 hover:underline text-xs"><i
+                                    class="ph-fill ph-calculator"></i> Rechner</button>
+                        </label>
+                        <input type="number" id="input-gas-cost" placeholder="0.00" oninput="calculateAll()"
+                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition-all dark:text-white">
+                    </div>
+                </div>
+
+                <!-- Hidden Gas Calculator -->
+                <div id="gas-calculator"
+                    class="hidden mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300">Spritkosten-Rechner</h3>
+                        <button onclick="closeGasCalc()"
+                            class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"><i
+                                class="ph ph-x"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Verbrauch
+                                (L/100km)</label>
+                            <input type="number" id="calc-consumption" value="7.5"
+                                class="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Preis pro Liter
+                                (€)</label>
+                            <input type="number" id="calc-price" value="1.75"
+                                class="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none">
+                        </div>
+                    </div>
+                    <button onclick="applyGasCalc()"
+                        class="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg transition-colors">Übernehmen</button>
+                </div>
+            </div>
+
+            <!-- Trips List -->
+            <div class="flex items-center justify-between mt-8 mb-4">
+                <h2 class="text-xl font-bold flex items-center gap-2"><i
+                        class="ph-fill ph-map-trifold text-emerald-500 text-2xl"></i> Fahrtenbuch</h2>
+                <button onclick="resetJourney()" title="Alles löschen und neu beginnen"
+                    class="text-xs font-bold text-red-500 hover:text-red-600 transition-colors flex items-center gap-1 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 px-3 py-1.5 rounded-lg border border-red-100 dark:border-red-500/20">
+                    <i class="ph-bold ph-trash"></i> Zurücksetzen
+                </button>
+            </div>
+
+            <div id="trips-container" class="space-y-4">
+                <!-- Trips will be injected here via JS -->
+            </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Map & Results -->
+        <div class="lg:col-span-4 space-y-6">
+
+            <!-- Map Card -->
+            <div id="map-card"
+                class="bg-white dark:bg-darkCard rounded-2xl shadow-sm border-t-4 border-t-amber-500 border-x border-b border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col h-80 lg:h-[30rem] transition-all duration-300 relative">
+                <div
+                    class="p-3 border-b border-gray-100 dark:border-gray-800 bg-amber-50/50 dark:bg-amber-900/10 flex justify-between items-center z-20">
+                    <h3 class="text-sm font-semibold flex items-center gap-2 text-amber-700 dark:text-amber-400"><i
+                            class="ph-fill ph-compass text-amber-500 text-lg"></i> Routen-Übersicht</h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="openInGoogleMaps()" title="In Google Maps öffnen"
+                            class="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"><i
+                                class="ph-bold ph-google-logo text-lg"></i></button>
+                        <button onclick="openInOSM()" title="In OpenStreetMap öffnen"
+                            class="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"><i
+                                class="ph-bold ph-map-trifold text-lg"></i></button>
+                        <button onclick="toggleMapExpand()" title="Karte vergrößern/verkleinern"
+                            class="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors ml-2 border-l border-amber-200 dark:border-amber-800 pl-2"><i
+                                class="ph-bold ph-arrows-out text-lg" id="map-expand-icon"></i></button>
+                    </div>
+                </div>
+                <div id="map-container" class="w-full flex-grow bg-gray-100 dark:bg-gray-800 z-10"></div>
+            </div>
+
+            <!-- Results Card -->
+            <div
+                class="bg-white dark:bg-darkCard rounded-2xl shadow-sm border-t-4 border-t-purple-500 border-x border-b border-gray-100 dark:border-gray-800 p-6 sticky top-24 relative overflow-hidden">
+                <div
+                    class="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 dark:bg-purple-500/5 rounded-bl-full -z-0 pointer-events-none">
+                </div>
+                <div class="flex justify-between items-center mb-6 relative z-10">
+                    <h2 class="text-lg font-semibold flex items-center gap-2"><i
+                            class="ph-fill ph-chart-pie-slice text-purple-500 text-xl"></i> Auswertung</h2>
+                    <button onclick="exportCSV()" title="Als CSV exportieren"
+                        class="text-gray-400 hover:text-purple-500 transition-colors"><i
+                            class="ph-bold ph-download-simple text-xl"></i></button>
+                </div>
+
+                <div
+                    class="grid grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl relative z-10 border border-gray-100 dark:border-gray-800 shadow-inner">
+                    <div>
+                        <p class="text-xs text-gray-500 font-medium mb-1">Gesamtstrecke</p>
+                        <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400"><span
+                                id="res-total-km">0</span> km</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 font-medium mb-1">Kosten / km</p>
+                        <p class="text-lg font-bold text-purple-600 dark:text-purple-400"><span
+                                id="res-cost-per-km">0.00</span> €</p>
+                    </div>
+                </div>
+
+                <!-- Client Breakdown Container -->
+                <div class="text-center text-gray-500 py-8 italic" id="empty-state-msg">
+                    Trage Kosten und Strecken ein, um die Auswertung zu sehen.
+                </div>
+                <div id="client-breakdown-container" class="space-y-3">
+                    <!-- Client breakdown cards injected here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Invoice Modal Overlay -->
+    <div id="invoice-modal"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-darkCard w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                <h2 class="text-xl font-bold flex items-center gap-2"><i class="ph ph-file-text"></i> Rechnungsvorlage
+                </h2>
+                <button onclick="closeInvoice()"
+                    class="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><i
+                        class="ph ph-x"></i></button>
+            </div>
+
+            <div class="p-8 overflow-y-auto flex-grow" id="invoice-content">
+                <!-- Printable Invoice Content -->
+                <div class="text-gray-800 dark:text-gray-200">
+                    <div class="flex justify-between items-start mb-10">
+                        <div>
+                            <h1 class="text-3xl font-light text-gray-900 dark:text-white tracking-tight">RECHNUNG</h1>
+                            <p class="text-sm mt-1 text-gray-500">Datum: <span id="inv-date"></span></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-gray-900 dark:text-white">Dein Unternehmen</p>
+                            <p class="text-sm text-gray-500">Musterstraße 1<br>12345 Musterstadt</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-10">
+                        <p class="text-sm text-gray-500 mb-1">Rechnung an:</p>
+                        <p class="font-bold text-lg text-gray-900 dark:text-white" id="inv-client-name">Kunde Name</p>
+                    </div>
+
+                    <table class="w-full text-left border-collapse mb-8">
+                        <thead>
+                            <tr class="border-b-2 border-gray-200 dark:border-gray-700">
+                                <th class="py-3 font-semibold text-sm">Beschreibung</th>
+                                <th class="py-3 font-semibold text-sm text-right">Menge</th>
+                                <th class="py-3 font-semibold text-sm text-right">Einzelpreis</th>
+                                <th class="py-3 font-semibold text-sm text-right">Gesamt</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inv-items">
+                            <!-- Items injected here -->
+                        </tbody>
+                    </table>
+
+                    <div class="flex justify-end">
+                        <div class="w-1/2">
+                            <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                                <span class="text-gray-600 dark:text-gray-400">Netto</span>
+                                <span id="inv-netto">0.00 €</span>
+                            </div>
+                            <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                                <span class="text-gray-600 dark:text-gray-400">MwSt. (19%)</span>
+                                <span id="inv-tax">0.00 €</span>
+                            </div>
+                            <div class="flex justify-between py-3 font-bold text-lg text-gray-900 dark:text-white">
+                                <span>Gesamtbetrag</span>
+                                <span id="inv-brutto">0.00 €</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 rounded-b-2xl flex justify-end gap-3">
+                <button onclick="closeInvoice()"
+                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 font-medium transition-colors">Schließen</button>
+                <button onclick="printInvoice()"
+                    class="px-5 py-2 rounded-xl bg-primary hover:bg-blue-600 text-white font-medium transition-colors flex items-center gap-2"><i
+                        class="ph ph-printer"></i> PDF / Drucken</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save/Load Modal -->
+    <div id="saveload-modal"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-darkCard w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                <h2 class="text-xl font-bold flex items-center gap-2"><i
+                        class="ph-fill ph-floppy-disk text-emerald-500"></i> Speichern & Laden</h2>
+                <button onclick="closeSaveLoadModal()"
+                    class="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><i
+                        class="ph ph-x"></i></button>
+            </div>
+
+            <div class="p-6 overflow-y-auto">
+                <!-- Save Section -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Aktuellen Stand
+                        speichern</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="save-name" placeholder="Name (optional)..."
+                            class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white">
+                        <button onclick="saveTrackSettings()"
+                            class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium transition-colors">Speichern</button>
+                    </div>
+                </div>
+
+                <hr class="border-gray-100 dark:border-gray-800 mb-6">
+
+                <!-- Load Section -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Gespeicherte Stände
+                        laden</label>
+                    <div id="saved-tracks-list" class="space-y-2 pr-2">
+                        <!-- Items injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        // --- State Management ---
+        let state = JSON.parse(localStorage.getItem('currentState')) || {
+            rentalCost: 0,
+            gasCost: 0,
+            trips: [
+                { id: '1', origin: '', destination: '', distance: 0, client: '', additionalCosts: 0 }
+            ]
+        };
+
+        // Address Book for Local Storage
+        let addressBook = JSON.parse(localStorage.getItem('addressBook') || '[]');
+        let clientBook = JSON.parse(localStorage.getItem('clientBook') || '[]');
+
+        // --- Save / Load Logic ---
+        function getSavedTracks() {
+            return JSON.parse(localStorage.getItem('savedTracks') || '[]');
+        }
+
+        function openSaveLoadModal() {
+            renderSavedTracks();
+            document.getElementById('saveload-modal').classList.remove('hidden');
+            document.getElementById('saveload-modal').classList.add('flex');
+        }
+
+        function closeSaveLoadModal() {
+            document.getElementById('saveload-modal').classList.add('hidden');
+            document.getElementById('saveload-modal').classList.remove('flex');
+        }
+
+        function saveTrackSettings() {
+            const nameInput = document.getElementById('save-name').value.trim();
+            const defaultName = new Date().toLocaleString('de-DE');
+            const saveName = nameInput || `Stand vom ${defaultName}`;
+
+            const cleanState = JSON.parse(JSON.stringify(state));
+            cleanState.trips.forEach(t => delete t.routeGeoJSON);
+
+            const saved = getSavedTracks();
+            saved.push({ id: Date.now().toString(), name: saveName, data: cleanState });
+            localStorage.setItem('savedTracks', JSON.stringify(saved));
+
+            document.getElementById('save-name').value = '';
+            showToast('Gespeichert!', 'success');
+            renderSavedTracks();
+        }
+
+        function loadTrackSettings(id) {
+            const saved = getSavedTracks();
+            const track = saved.find(t => t.id === id);
+            if (track && track.data) {
+                state = track.data;
+                document.getElementById('input-rental-cost').value = state.rentalCost || '';
+                document.getElementById('input-gas-cost').value = state.gasCost || '';
+                renderTrips();
+                calculateAll();
+                closeSaveLoadModal();
+                showToast('Erfolgreich geladen!', 'success');
+                autoFetchMissingRoutes();
+            }
+        }
+
+        function deleteTrackSettings(id) {
+            let saved = getSavedTracks();
+            saved = saved.filter(t => t.id !== id);
+            localStorage.setItem('savedTracks', JSON.stringify(saved));
+            renderSavedTracks();
+        }
+
+        function renderSavedTracks() {
+            const container = document.getElementById('saved-tracks-list');
+            const saved = getSavedTracks();
+
+            if (saved.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic">Keine gespeicherten Stände vorhanden.</p>';
+                return;
+            }
+
+            // Reverse to show newest first
+            container.innerHTML = [...saved].reverse().map(t => `
+                <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800">
+                    <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate pr-2">${t.name}</span>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadTrackSettings('${t.id}')" class="text-primary hover:text-blue-600 transition-colors p-1" title="Laden"><i class="ph-bold ph-download-simple text-lg"></i></button>
+                        <button onclick="deleteTrackSettings('${t.id}')" class="text-red-400 hover:text-red-600 transition-colors p-1" title="Löschen"><i class="ph-bold ph-trash text-lg"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- Init & Load ---
+        window.onload = () => {
+            initDarkMode();
+            loadFromURL();
+            initMap();
+            updateDatalists();
+
+            document.getElementById('input-rental-cost').value = state.rentalCost || '';
+            document.getElementById('input-gas-cost').value = state.gasCost || '';
+
+            renderTrips();
+            calculateAll();
+
+            autoFetchMissingRoutes();
+        };
+
+        // --- Dark Mode ---
+        function initDarkMode() {
+            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+        }
+
+        // --- Local Address Book ---
+        function saveToAddressBook(val, type) {
+            if (!val || val.trim() === '') return;
+            let book = type === 'client' ? clientBook : addressBook;
+            if (!book.includes(val)) {
+                book.push(val);
+                localStorage.setItem(type === 'client' ? 'clientBook' : 'addressBook', JSON.stringify(book));
+                updateDatalists();
+            }
+        }
+
+        function updateDatalists() {
+            const addrList = document.getElementById('address-book');
+            const clientList = document.getElementById('client-book');
+            addrList.innerHTML = addressBook.map(a => `<option value="${a}">`).join('');
+            clientList.innerHTML = clientBook.map(c => `<option value="${c}">`).join('');
+        }
+
+        // --- Map Setup (Leaflet) ---
+        let map = null;
+        let routeLayers = [];
+
+        function initMap() {
+            if (document.getElementById('map-container') && typeof L !== 'undefined' && !map) {
+                map = L.map('map-container').setView([51.165691, 10.451526], 5); // Center DE
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OSM contributors'
+                }).addTo(map);
+            }
+        }
+
+        // --- Customer Colors ---
+        const palette = [
+            '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+            '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+            '#f97316', '#6366f1'
+        ];
+
+        function getClientColor(clientName) {
+            const name = clientName ? clientName.trim() : 'Unbekannt';
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const index = Math.abs(hash) % palette.length;
+            return palette[index];
+        }
+
+        // --- Map Extensions ---
+        function openInGoogleMaps() {
+            if (state.trips.length === 0) return showToast('Keine Fahrten vorhanden.', 'warning');
+            const origin = encodeURIComponent(state.trips[0].origin);
+            const dest = encodeURIComponent(state.trips[state.trips.length - 1].destination);
+            let waypoints = '';
+            if (state.trips.length > 1) {
+                waypoints = state.trips.slice(0, -1).map(t => encodeURIComponent(t.destination)).join('|');
+            }
+            const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&waypoints=${waypoints}`;
+            window.open(url, '_blank');
+        }
+
+        function openInOSM() {
+            if (state.trips.length === 0) return showToast('Keine Fahrten vorhanden.', 'warning');
+            let coords = [];
+            state.trips.forEach(t => {
+                if (t.routeGeoJSON && t.routeGeoJSON.coordinates && t.routeGeoJSON.coordinates.length > 0) {
+                    const c = t.routeGeoJSON.coordinates;
+                    coords.push(`${c[0][1]},${c[0][0]}`); // start
+                    coords.push(`${c[c.length - 1][1]},${c[c.length - 1][0]}`); // end
+                }
+            });
+            coords = [...new Set(coords)];
+            if (coords.length >= 2) {
+                const url = `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${coords.join(';')}`;
+                window.open(url, '_blank');
+            } else {
+                showToast('Bitte berechne zuerst die Distanzen (Zauberstab), um OSM zu öffnen.', 'error');
+            }
+        }
+
+        function toggleMapExpand() {
+            const card = document.getElementById('map-card');
+            const icon = document.getElementById('map-expand-icon');
+            if (card.classList.contains('fixed')) {
+                card.classList.remove('fixed', 'inset-4', 'z-[100]', 'lg:h-auto');
+                card.classList.add('h-80', 'lg:h-[30rem]');
+                icon.classList.replace('ph-arrows-in', 'ph-arrows-out');
+                document.body.style.overflow = '';
+            } else {
+                card.classList.remove('h-80', 'lg:h-[30rem]');
+                card.classList.add('fixed', 'inset-4', 'z-[100]', 'lg:h-auto');
+                icon.classList.replace('ph-arrows-out', 'ph-arrows-in');
+                document.body.style.overflow = 'hidden';
+            }
+            setTimeout(() => { if (map) map.invalidateSize() }, 300);
+        }
+
+        function updateMap() {
+            if (!map) return;
+
+            // Remove old layers
+            routeLayers.forEach(layer => map.removeLayer(layer));
+            routeLayers = [];
+
+            let hasGeoJSON = false;
+
+            state.trips.forEach((trip, index) => {
+                if (trip.routeGeoJSON) {
+                    hasGeoJSON = true;
+                    const color = getClientColor(trip.client);
+                    const layer = L.geoJSON(trip.routeGeoJSON, {
+                        style: { color: color, weight: 4, opacity: 0.8 }
+                    }).bindTooltip(`${trip.origin} ➔ ${trip.destination}`).addTo(map);
+                    routeLayers.push(layer);
+
+                    // Markers
+                    const coords = trip.routeGeoJSON.coordinates;
+                    if (coords && coords.length > 0) {
+                        const start = coords[0];
+                        const marker = L.circleMarker([start[1], start[0]], {
+                            radius: 5, fillColor: color, color: '#fff', weight: 2, fillOpacity: 1
+                        }).bindTooltip(`Start: ${trip.origin}`).addTo(map);
+                        routeLayers.push(marker);
+                    }
+                }
+            });
+
+            // Bug fix: Only fit bounds if there are actually valid route layers
+            if (hasGeoJSON && routeLayers.length > 0) {
+                const group = new L.featureGroup(routeLayers);
+                if (group.getBounds().isValid()) {
+                    map.fitBounds(group.getBounds(), { padding: [30, 30] });
+                }
+            }
+        }
+
+        // --- Gas Calculator ---
+        function openGasCalc() { document.getElementById('gas-calculator').classList.remove('hidden'); }
+        function closeGasCalc() { document.getElementById('gas-calculator').classList.add('hidden'); }
+        function applyGasCalc() {
+            const cons = parseFloat(document.getElementById('calc-consumption').value) || 0;
+            const price = parseFloat(document.getElementById('calc-price').value) || 0;
+            const totalDist = state.trips.reduce((sum, t) => sum + (parseFloat(t.distance) || 0), 0);
+
+            const totalGasCost = (totalDist / 100) * cons * price;
+            document.getElementById('input-gas-cost').value = totalGasCost.toFixed(2);
+            state.gasCost = totalGasCost;
+
+            closeGasCalc();
+            calculateAll();
+            showToast('Spritkosten berechnet!', 'success');
+        }
+
+        // --- STREAMING_CHUNK:Rendering Trips and Handling Inputs... ---
+        let draggedTripIndex = null;
+
+        function generateId() { return Math.random().toString(36).substr(2, 9); }
+
+        function resetJourney() {
+            if (confirm("Möchtest du wirklich alle Fahrten löschen und ein neues Fahrtenbuch beginnen?")) {
+                state = {
+                    rentalCost: 0,
+                    gasCost: 0,
+                    trips: [
+                        { id: generateId(), origin: '', destination: '', distance: 0, client: '', additionalCosts: 0 }
+                    ]
+                };
+                document.getElementById('input-rental-cost').value = '';
+                document.getElementById('input-gas-cost').value = '';
+                renderTrips();
+                calculateAll();
+                showToast('Fahrtenbuch zurückgesetzt.', 'success');
+            }
+        }
+
+        function addTrip(index = state.trips.length) {
+            let prefilledOrigin = '';
+            if (index > 0 && state.trips[index - 1]) {
+                prefilledOrigin = state.trips[index - 1].destination || '';
+            }
+
+            state.trips.splice(index, 0, { id: generateId(), origin: prefilledOrigin, destination: '', distance: 0, client: '', additionalCosts: 0 });
+            renderTrips();
+            calculateAll();
+        }
+
+        function addReturnTrip() {
+            if (state.trips.length === 0) return showToast('Keine vorherigen Fahrten gefunden.', 'error');
+            const firstTrip = state.trips[0];
+            const lastTrip = state.trips[state.trips.length - 1];
+
+            state.trips.push({
+                id: generateId(),
+                origin: lastTrip.destination,
+                destination: firstTrip.origin,
+                distance: 0,
+                client: lastTrip.client,
+                additionalCosts: 0
+            });
+            renderTrips();
+            calculateAll();
+            showToast('Rückfahrt hinzugefügt.', 'success');
+        }
+
+        // --- Drag & Drop Handlers ---
+        let lastMouseDownTarget = null;
+        document.addEventListener('mousedown', (e) => {
+            lastMouseDownTarget = e.target;
+        });
+
+        function handleDragStart(e, index) {
+            if (lastMouseDownTarget && ['INPUT', 'BUTTON', 'SELECT', 'TEXTAREA'].includes(lastMouseDownTarget.tagName)) {
+                e.preventDefault();
+                return;
+            }
+            draggedTripIndex = index;
+            e.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => e.target.classList.add('opacity-40'), 0);
+        }
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('border-primary', 'dark:border-primary', 'scale-[1.02]');
+        }
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('border-primary', 'dark:border-primary', 'scale-[1.02]');
+        }
+        function handleDrop(e, dropIndex) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('border-primary', 'dark:border-primary', 'scale-[1.02]');
+
+            if (draggedTripIndex === null || draggedTripIndex === dropIndex) return;
+
+            const [draggedTrip] = state.trips.splice(draggedTripIndex, 1);
+            state.trips.splice(dropIndex, 0, draggedTrip);
+            draggedTripIndex = null;
+
+            renderTrips();
+            calculateAll();
+            updateMap();
+        }
+
+        function removeTrip(id) {
+            state.trips = state.trips.filter(t => t.id !== id);
+            renderTrips();
+            calculateAll();
+        }
+
+        function updateTrip(id, field, value) {
+            const trip = state.trips.find(t => t.id === id);
+            if (trip) {
+                if (field === 'distance' || field === 'splitPercent' || field === 'additionalCosts') {
+                    trip[field] = parseFloat(value) || 0;
+                } else if (field === 'splitActive') {
+                    trip[field] = value;
+                } else {
+                    trip[field] = value;
+                }
+
+                // Save to address book on blur/change
+                if (field === 'origin' || field === 'destination') {
+                    saveToAddressBook(value, 'address');
+                    delete trip.routeGeoJSON;
+                    if (trip.origin && trip.destination) {
+                        autoCalculateDistance(id, true);
+                    }
+                }
+                if (field === 'client' || field === 'splitClient') {
+                    saveToAddressBook(value, 'client');
+                    const color = getClientColor(value);
+                    const card = document.getElementById(`trip-card-${id}`);
+                    if (card) card.style.borderLeftColor = color;
+                    const handle = document.getElementById(`trip-handle-${id}`);
+                    if (handle) handle.style.backgroundColor = color;
+                }
+
+                calculateAll();
+            }
+        }
+
+        async function getCoordinates(address) {
+            const cacheKey = 'geocodeCache';
+            let cache = JSON.parse(localStorage.getItem(cacheKey) || '{}');
+            if (cache[address]) return cache[address];
+
+            // Wait 1 second before fetching to avoid rate limits
+            await new Promise(r => setTimeout(r, 1000));
+
+            try {
+                // Try Photon first as it is more lenient
+                const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(address)}&limit=1`);
+                const data = await res.json();
+                if (data.features && data.features.length > 0) {
+                    const coords = {
+                        lon: data.features[0].geometry.coordinates[0],
+                        lat: data.features[0].geometry.coordinates[1]
+                    };
+                    cache[address] = coords;
+                    localStorage.setItem(cacheKey, JSON.stringify(cache));
+                    return coords;
+                }
+            } catch (e) {
+                console.warn("Photon failed", e);
+            }
+
+            try {
+                // Fallback to Nominatim
+                const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`);
+                const nomData = await nomRes.json();
+                if (nomData && nomData.length > 0) {
+                    const coords = { lat: parseFloat(nomData[0].lat), lon: parseFloat(nomData[0].lon) };
+                    cache[address] = coords;
+                    localStorage.setItem(cacheKey, JSON.stringify(cache));
+                    return coords;
+                }
+            } catch (e) {
+                console.warn("Nominatim failed", e);
+            }
+
+            return null;
+        }
+
+        // --- Auto Distance & Routing (OSRM) ---
+        async function autoCalculateDistance(id, silent = false) {
+            const trip = state.trips.find(t => t.id === id);
+            if (!trip || !trip.origin || !trip.destination) {
+                if (!silent) showToast('Bitte Start und Ziel eintragen!', 'error');
+                return;
+            }
+
+            const btn = document.getElementById(`magic-btn-${id}`);
+            if (btn) btn.classList.add('animate-spin', 'text-primary');
+
+            try {
+                // 1. Geocode Origin & Destination
+                const originCoords = await getCoordinates(trip.origin);
+                const destCoords = await getCoordinates(trip.destination);
+
+                if (!originCoords || !destCoords) throw new Error("Orte nicht gefunden");
+
+                const startLon = originCoords.lon, startLat = originCoords.lat;
+                const endLon = destCoords.lon, endLat = destCoords.lat;
+
+                // 2. Route with OSRM
+                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson`;
+                const routeRes = await fetch(osrmUrl);
+                const routeData = await routeRes.json();
+
+                if (routeData.routes && routeData.routes.length > 0) {
+                    const distKm = (routeData.routes[0].distance / 1000).toFixed(0);
+                    if (!silent || !trip.distance || trip.distance === 0) {
+                        trip.distance = parseFloat(distKm);
+                        const distInput = document.getElementById(`dist-${id}`);
+                        if (distInput) distInput.value = distKm;
+                    }
+                    trip.routeGeoJSON = routeData.routes[0].geometry; // Save geometry for map
+
+                    calculateAll();
+                    updateMap();
+                    if (!silent) showToast(`${distKm} km gefunden!`, 'success');
+                } else {
+                    throw new Error("Keine Route gefunden");
+                }
+            } catch (error) {
+                if (!silent) showToast('Fehler bei der Berechnung.', 'error');
+                console.error(error);
+            } finally {
+                if (btn) btn.classList.remove('animate-spin', 'text-primary');
+            }
+        }
+
+        async function autoFetchMissingRoutes() {
+            for (const trip of state.trips) {
+                if (trip.origin && trip.destination && !trip.routeGeoJSON) {
+                    await autoCalculateDistance(trip.id, true);
+                }
+            }
+        }
+
+        // --- Rendering ---
+        function renderTrips() {
+            const container = document.getElementById('trips-container');
+            container.innerHTML = '';
+
+            state.trips.forEach((trip, index) => {
+                const clientColor = getClientColor(trip.client);
+
+                // Button zum Einfügen dazwischen
+                if (index > 0) {
+                    const insertDiv = document.createElement('div');
+                    insertDiv.className = 'w-full h-4 relative flex justify-center items-center z-10 group/insert my-1';
+                    insertDiv.innerHTML = `
+                        <div class="absolute inset-0 w-full h-full cursor-pointer" onclick="addTrip(${index})"></div>
+                        <button onclick="addTrip(${index})" class="absolute z-10 bg-emerald-500 text-white rounded-full px-3 py-1 text-xs font-bold shadow-md transition-all flex items-center gap-1 border-2 border-white dark:border-darkBg 
+                            opacity-100 sm:opacity-0 sm:group-hover/insert:opacity-100 sm:-translate-y-2 sm:group-hover/insert:translate-y-0 scale-90 sm:group-hover/insert:scale-100">
+                            <i class="ph-bold ph-plus"></i> Einfügen
+                        </button>
+                        <div class="absolute inset-x-4 h-[2px] bg-emerald-500/20 rounded-full opacity-0 sm:group-hover/insert:opacity-100 transition-opacity pointer-events-none"></div>
+                    `;
+                    container.appendChild(insertDiv);
+                }
+
+                const div = document.createElement('div');
+                div.id = `trip-card-${trip.id}`;
+                div.className = 'bg-white dark:bg-darkCard p-5 rounded-2xl shadow-sm border-y border-r border-gray-100 dark:border-gray-800 relative group transition-all hover:shadow-md cursor-grab active:cursor-grabbing';
+                div.style.borderLeft = `4px solid ${clientColor}`;
+
+                // Drag & Drop Attribute
+                div.draggable = true;
+                div.ondragstart = (e) => handleDragStart(e, index);
+                div.ondragover = handleDragOver;
+                div.ondragleave = handleDragLeave;
+                div.ondrop = (e) => handleDrop(e, index);
+                div.ondragend = (e) => e.target.classList.remove('opacity-40');
+
+                div.innerHTML = `
+                    <div id="trip-handle-${trip.id}" class="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-white dark:border-darkBg shadow-sm cursor-grab active:cursor-grabbing" style="background-color: ${clientColor};" title="Ziehen zum Verschieben">
+                        <i class="ph-bold ph-dots-six-vertical"></i>
+                    </div>
+                    <button onclick="removeTrip('${trip.id}')" class="absolute right-3 top-3 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 z-20">
+                        <i class="ph-fill ph-trash text-lg"></i>
+                    </button>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div class="md:col-span-5 flex gap-2">
+                            <input type="text" list="address-book" placeholder="${index === 0 ? 'Start, z.B. Hamburg' : 'Start'}" value="${trip.origin}" onchange="updateTrip('${trip.id}', 'origin', this.value)" class="w-1/2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none dark:text-white">
+                            <i class="ph ph-arrow-right text-gray-400 self-center"></i>
+                            <input type="text" list="address-book" placeholder="${index === 0 ? 'Ziel, z.B. Berlin' : 'Ziel'}" value="${trip.destination}" onchange="updateTrip('${trip.id}', 'destination', this.value)" class="w-1/2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none dark:text-white">
+                        </div>
+                        
+                        <div class="md:col-span-3 relative flex items-center">
+                            <input type="number" id="dist-${trip.id}" placeholder="Km" value="${trip.distance || ''}" oninput="updateTrip('${trip.id}', 'distance', this.value)" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl pl-3 pr-10 py-2 text-sm focus:ring-2 focus:ring-primary outline-none dark:text-white">
+                            <button onclick="autoCalculateDistance('${trip.id}')" class="absolute right-2 text-gray-400 hover:text-primary transition-colors p-1 z-20">
+                                <i id="magic-btn-${trip.id}" class="ph-fill ph-magic-wand text-lg"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="md:col-span-4 flex gap-2">
+                            <div class="relative w-full flex items-center group/client">
+                                <input type="text" list="client-book" placeholder="Kunde" value="${trip.client}" onchange="updateTrip('${trip.id}', 'client', this.value)" class="w-full bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/50 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none dark:text-white pr-8">
+                                <button onclick="toggleSplit('${trip.id}')" class="absolute right-2 text-gray-400 hover:text-primary z-20" title="Strecke auf Kunden aufteilen">
+                                    <i class="ph-bold ph-arrows-split"></i>
+                                </button>
+                            </div>
+                            <input type="number" placeholder="+ € (Maut etc)" value="${trip.additionalCosts || ''}" oninput="updateTrip('${trip.id}', 'additionalCosts', this.value)" class="w-24 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-2 py-2 text-sm focus:ring-2 focus:ring-primary outline-none dark:text-white text-center" title="Zusatzkosten (Maut, Parken)">
+                        </div>
+                    </div>
+
+                    <!-- Split Area -->
+                    <div id="split-${trip.id}" class="${trip.splitActive ? 'flex' : 'hidden'} mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 items-center gap-4 bg-gray-50/50 dark:bg-gray-900/30 p-3 rounded-xl">
+                        <div class="flex-grow flex items-center gap-3">
+                            <span class="text-xs font-medium text-gray-500 truncate w-16">${trip.client || 'Kunde 1'}</span>
+                            <input type="range" min="0" max="100" value="${trip.splitPercent !== undefined ? trip.splitPercent : 50}" oninput="updateTrip('${trip.id}', 'splitPercent', this.value); document.getElementById('split-val-${trip.id}').innerText = this.value + '%'" class="w-full accent-primary z-20">
+                            <span class="text-xs font-bold text-primary w-10 text-right" id="split-val-${trip.id}">${trip.splitPercent !== undefined ? trip.splitPercent : 50}%</span>
+                        </div>
+                        <i class="ph-bold ph-arrows-left-right text-gray-400"></i>
+                        <input type="text" list="client-book" placeholder="Kunde 2" value="${trip.splitClient || ''}" onchange="updateTrip('${trip.id}', 'splitClient', this.value)" class="w-1/3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-primary outline-none dark:text-white z-20">
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            // End controls (Add Trip & Return Home)
+            const endControls = document.createElement('div');
+            endControls.className = 'flex flex-col sm:flex-row items-center gap-3 pt-4';
+            endControls.innerHTML = `
+                <button onclick="addTrip()" class="w-full sm:w-auto flex-grow flex justify-center items-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-medium transition-all border-2 border-dashed border-emerald-200 dark:border-emerald-800 hover:border-emerald-500">
+                    <i class="ph-bold ph-plus"></i> Fahrt am Ende hinzufügen
+                </button>
+                <button onclick="addReturnTrip()" class="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium transition-all shadow-md shadow-blue-500/30">
+                    <i class="ph-bold ph-arrows-left-right"></i> Rückfahrt zum Start
+                </button>
+            `;
+            container.appendChild(endControls);
+        }
+
+        function toggleSplit(id) {
+            const trip = state.trips.find(t => t.id === id);
+            if (trip) {
+                trip.splitActive = !trip.splitActive;
+                if (trip.splitActive && trip.splitPercent === undefined) trip.splitPercent = 50;
+                renderTrips();
+                calculateAll();
+            }
+        }
+
+        // --- STREAMING_CHUNK:Core Calculation Logic... ---
+        function calculateAll() {
+            // Read main inputs
+            state.rentalCost = parseFloat(document.getElementById('input-rental-cost').value) || 0;
+            state.gasCost = parseFloat(document.getElementById('input-gas-cost').value) || 0;
+
+            const totalCost = state.rentalCost + state.gasCost;
+            let totalKm = 0;
+
+            // First pass: sum total distance
+            state.trips.forEach(trip => { totalKm += (trip.distance || 0); });
+
+            const costPerKm = totalKm > 0 ? (totalCost / totalKm) : 0;
+
+            // Update summary UI
+            document.getElementById('res-total-km').innerText = totalKm.toLocaleString('de-DE');
+            document.getElementById('res-cost-per-km').innerText = costPerKm.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+            // Second pass: Calculate per client & determine order
+            let clientData = {}; // { 'ClientName': { km: 0, cost: 0, additional: 0 } }
+            let clientOrder = [];
+
+            state.trips.forEach(trip => {
+                const dist = trip.distance || 0;
+                const addCost = trip.additionalCosts || 0;
+                const c1 = trip.client ? trip.client.trim() : 'Unbekannt';
+
+                if (!clientOrder.includes(c1)) clientOrder.push(c1);
+
+                if (trip.splitActive && trip.splitClient) {
+                    const p1 = (trip.splitPercent !== undefined ? trip.splitPercent : 50) / 100;
+                    const p2 = 1 - p1;
+                    const c2 = trip.splitClient.trim();
+
+                    if (!clientOrder.includes(c2)) clientOrder.push(c2);
+
+                    // Client 1 split
+                    if (!clientData[c1]) clientData[c1] = { km: 0, cost: 0, additional: 0 };
+                    clientData[c1].km += dist * p1;
+                    clientData[c1].cost += (dist * p1) * costPerKm;
+                    clientData[c1].additional += addCost * p1;
+
+                    // Client 2 split
+                    if (!clientData[c2]) clientData[c2] = { km: 0, cost: 0, additional: 0 };
+                    clientData[c2].km += dist * p2;
+                    clientData[c2].cost += (dist * p2) * costPerKm;
+                    clientData[c2].additional += addCost * p2;
+                } else {
+                    // Normal 100% assignment
+                    if (!clientData[c1]) clientData[c1] = { km: 0, cost: 0, additional: 0 };
+                    clientData[c1].km += dist;
+                    clientData[c1].cost += dist * costPerKm;
+                    clientData[c1].additional += addCost;
+                }
+            });
+
+            renderResults(clientData, clientOrder);
+            updateMap();
+
+            // Auto-save state
+            const cleanState = JSON.parse(JSON.stringify(state));
+            cleanState.trips.forEach(t => delete t.routeGeoJSON);
+            localStorage.setItem('currentState', JSON.stringify(cleanState));
+        }
+
+        function renderResults(clientData, clientOrder) {
+            const container = document.getElementById('client-breakdown-container');
+            const emptyMsg = document.getElementById('empty-state-msg');
+            container.innerHTML = '';
+
+            const clients = Object.keys(clientData);
+
+            if (clients.length === 0) {
+                if (emptyMsg) emptyMsg.style.display = 'block';
+                return;
+            }
+            if (emptyMsg) emptyMsg.style.display = 'none';
+
+            // Use the chronological order of appearance
+            clientOrder.forEach(client => {
+                const data = clientData[client];
+                if (!data) return;
+
+                const totalClientCost = data.cost + data.additional;
+                if (totalClientCost === 0 && data.km === 0) return; // Skip empty
+
+                const clientColor = getClientColor(client);
+                const div = document.createElement('div');
+                div.className = 'bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 rounded-xl p-4 flex flex-col gap-3 border-y border-r border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden';
+                div.style.borderLeft = `4px solid ${clientColor}`;
+                div.innerHTML = `
+                    <div class="absolute -right-4 -top-4 pointer-events-none" style="color: ${clientColor}; opacity: 0.05;">
+                        <i class="ph-fill ph-user-circle text-8xl"></i>
+                    </div>
+                    <div class="flex justify-between items-center relative z-10">
+                        <h3 class="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <i class="ph-fill ph-user-circle text-xl" style="color: ${clientColor};"></i> ${client}
+                        </h3>
+                        <span class="text-lg font-bold text-purple-600 dark:text-purple-400">${totalClientCost.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                    </div>
+                    <div class="flex justify-between text-sm text-gray-500 relative z-10">
+                        <span>Anteil Strecke:</span>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">${data.km.toLocaleString('de-DE', { maximumFractionDigits: 1 })} km</span>
+                    </div>
+                    ${data.additional > 0 ? `
+                    <div class="flex justify-between text-sm text-gray-500 relative z-10">
+                        <span>Zusatzkosten (Maut/Parken):</span>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">+ ${data.additional.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €</span>
+                    </div>
+                    ` : ''}
+                    <div class="pt-2 mt-1 border-t border-gray-200 dark:border-gray-700 flex justify-end relative z-10">
+                        <button onclick="generateInvoice('${client}', ${data.km}, ${data.cost}, ${data.additional})" class="text-xs font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 hover:underline flex items-center gap-1">
+                            <i class="ph-bold ph-file-pdf"></i> Rechnung generieren
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // --- STREAMING_CHUNK:Invoice, Export & Utilities... ---
+        function generateInvoice(client, km, cost, additional) {
+            document.getElementById('inv-date').innerText = new Date().toLocaleDateString('de-DE');
+            document.getElementById('inv-client-name').innerText = client;
+
+            const tbody = document.getElementById('inv-items');
+            tbody.innerHTML = '';
+
+            const costPerKm = parseFloat(document.getElementById('res-cost-per-km').innerText.replace(',', '.')) || 0;
+
+            // Item 1: Mileage
+            tbody.innerHTML += `
+                <tr class="border-b border-gray-100 dark:border-gray-800">
+                    <td class="py-3 text-sm">Fahrtkosten-Anteil Mietwagen/Kraftstoff</td>
+                    <td class="py-3 text-sm text-right">${km.toFixed(1)} km</td>
+                    <td class="py-3 text-sm text-right">${costPerKm.toFixed(4)} €</td>
+                    <td class="py-3 text-sm text-right font-medium">${cost.toFixed(2)} €</td>
+                </tr>
+            `;
+
+            // Item 2: Additional
+            if (additional > 0) {
+                tbody.innerHTML += `
+                    <tr class="border-b border-gray-100 dark:border-gray-800">
+                        <td class="py-3 text-sm">Zusatzkosten (Maut, Parken, Spesen)</td>
+                        <td class="py-3 text-sm text-right">1 pauschal</td>
+                        <td class="py-3 text-sm text-right">${additional.toFixed(2)} €</td>
+                        <td class="py-3 text-sm text-right font-medium">${additional.toFixed(2)} €</td>
+                    </tr>
+                `;
+            }
+
+            const netto = cost + additional;
+            const tax = netto * 0.19;
+            const brutto = netto + tax;
+
+            document.getElementById('inv-netto').innerText = netto.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €';
+            document.getElementById('inv-tax').innerText = tax.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €';
+            document.getElementById('inv-brutto').innerText = brutto.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €';
+
+            document.getElementById('invoice-modal').classList.remove('hidden');
+            document.getElementById('invoice-modal').classList.add('flex');
+        }
+
+        function closeInvoice() {
+            document.getElementById('invoice-modal').classList.add('hidden');
+            document.getElementById('invoice-modal').classList.remove('flex');
+        }
+
+        function printInvoice() {
+            const printContents = document.getElementById('invoice-content').innerHTML;
+            const originalContents = document.body.innerHTML;
+
+            // Apply a quick print-friendly style override
+            document.body.innerHTML = `
+                <div style="padding: 40px; font-family: sans-serif; color: black; background: white;">
+                    ${printContents}
+                </div>
+            `;
+            window.print();
+            document.body.innerHTML = originalContents;
+            location.reload(); // Simplest way to restore full state after hacky print
+        }
+
+        function exportCSV() {
+            let csv = "ID;Start;Ziel;Distanz(km);Kunde;Zusatzkosten;Split-Aktiv;Kunde2;Split-Prozent\n";
+            state.trips.forEach(t => {
+                csv += `${t.id};${t.origin};${t.destination};${t.distance};${t.client};${t.additionalCosts};${t.splitActive};${t.splitClient || ''};${t.splitPercent || ''}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "fahrtenbuch_export.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('CSV exportiert', 'success');
+        }
+
+        function shareLink() {
+            // Remove huge GeoJSON data before serializing to keep URL short
+            const cleanState = JSON.parse(JSON.stringify(state));
+            cleanState.trips.forEach(t => delete t.routeGeoJSON);
+
+            const stateStr = encodeURIComponent(btoa(JSON.stringify(cleanState)));
+            const url = window.location.origin + window.location.pathname + '?data=' + stateStr;
+
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('Link kopiert!', 'success');
+            }).catch(err => {
+                // Fallback
+                const input = document.createElement('input');
+                input.value = url;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                showToast('Link kopiert (Fallback)!', 'success');
+            });
+        }
+
+        function loadFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('data')) {
+                try {
+                    const decoded = JSON.parse(atob(decodeURIComponent(params.get('data'))));
+                    if (decoded && decoded.trips) {
+                        state = decoded;
+                        // Clean URL without reloading
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        showToast('Daten geladen!', 'success');
+                    }
+                } catch (e) {
+                    console.error("Failed to load state from URL", e);
+                    showToast('Link-Daten ungültig.', 'error');
+                }
+            }
+        }
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            const bgClass = type === 'success' ? 'bg-green-500' : (type === 'error' ? 'bg-red-500' : 'bg-gray-800');
+            const icon = type === 'success' ? 'ph-check-circle' : (type === 'error' ? 'ph-warning-circle' : 'ph-info');
+
+            toast.className = `toast-enter ${bgClass} text-white px-4 py-3 rounded-xl shadow-lg font-medium text-sm flex items-center gap-2`;
+            toast.innerHTML = `<i class="ph-fill ${icon} text-lg"></i> ${msg}`;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                toast.style.transition = 'all 0.3s ease-in';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>
