@@ -4,6 +4,13 @@
 
 A modern, fast, and fully client-side web application for tracking rental car expenses, calculating travel distances via interactive maps, breaking down costs by client, and generating professional invoices.
 
+<p align="center">
+  <img src="docs/light-screen.png" alt="Light Theme" width="45%">
+  <img src="docs/dark-screen.png" alt="Dark Theme" width="45%">
+</p>
+
+[**📖 Read the full Technical Documentation here**](docs/documentation.md)
+
 ## ✨ Features
 
 - 🗺️ **Interactive Map Integration:** Visualizes your routes on an interactive map using Leaflet and OpenStreetMap.
