@@ -1,5 +1,8 @@
 # 🚗 Reisekosten Pro (Rental Expense Tracker)
 
+[Open the live app on GitHub Pages](https://digitaliq.github.io/Reisekosten-App/)
+
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 A modern, fast, and fully client-side web application for tracking rental car expenses, calculating travel distances via interactive maps, breaking down costs by client, and generating professional invoices.
