@@ -47,6 +47,10 @@ This is a completely standalone frontend application requiring no backend or bui
 - [Leaflet.js](https://leafletjs.com/) for interactive maps
 - [Phosphor Icons](https://phosphoricons.com/)
 
+## ☕ Support
+
+If Reisekosten Pro is useful to you, you can [buy me a coffee](https://buymeacoffee.com/manuel_8472). The app stays free either way.
+
 ## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
